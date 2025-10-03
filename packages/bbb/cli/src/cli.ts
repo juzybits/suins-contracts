@@ -11,7 +11,13 @@ import { CetusRegistrySchema } from "./schema/cetus_registry.js";
 import { CetusSwapEventSchema } from "./schema/cetus_swap.js";
 import { BBBVaultSchema } from "./schema/vault.js";
 import * as sdk from "./sdk.js";
-import { getPriceInfoObject, logJson, logTxResp, newSuiClient, signAndExecuteTx } from "./utils.js";
+import {
+    getPriceInfoObject,
+    logJson,
+    logTxResp,
+    newSuiClient,
+    signAndExecuteTx,
+} from "./utils.js";
 
 // === constants ===
 
@@ -106,7 +112,9 @@ program
         }
 
         const resp = await signAndExecuteTx({ tx, dryRun });
-        const createdObjs = resp.objectChanges?.filter((change) => change.type === "created");
+        const createdObjs = resp.objectChanges?.filter(
+            (change) => change.type === "created",
+        );
         logJson({
             txStatus: resp.effects?.status.status,
             txDigest: resp.digest,
@@ -151,8 +159,22 @@ program
     .command("get-balances")
     .description("Fetch the coin balances in the BBBVault")
     .action(async () => {
-        const balances = await getBalances();
-        logJson(balances);
+        const balancesRaw = await getBalances();
+        const balancesReadable = balancesRaw.map((bal) => {
+            const coinInfo =
+                bal.ticker in cnf.coins
+                    ? cnf.coins[bal.ticker as keyof typeof cnf.coins]
+                    : null;
+            const balanceReadable = coinInfo
+                ? (Number(bal.balance) / 10 ** coinInfo.decimals).toFixed(2)
+                : undefined;
+            return {
+                ticker: bal.ticker,
+                balance: balanceReadable,
+                balanceRaw: bal.balance,
+            };
+        });
+        logJson(balancesReadable);
     });
 
 program
@@ -165,7 +187,13 @@ program
     )
     .requiredOption("-a, --amount <amount>", 'human-readable amount (0.1 SUI = "0.1")')
     .action(
-        async ({ coinTicker, amount }: { coinTicker: keyof typeof cnf.coins; amount: string }) => {
+        async ({
+            coinTicker,
+            amount,
+        }: {
+            coinTicker: keyof typeof cnf.coins;
+            amount: string;
+        }) => {
             const coinInfo = cnf.coins[coinTicker];
             const amountNum = parseFloat(amount);
             if (Number.isNaN(amountNum) || amountNum <= 0) {
@@ -455,7 +483,9 @@ async function getBalances() {
         ids: dfPage.data.map((df) => df.objectId),
         options: { showContent: true },
     });
-    const balanceDfObjs = balanceDfResps.map((resp) => BalanceDynamicFieldSchema.parse(resp.data));
+    const balanceDfObjs = balanceDfResps.map((resp) =>
+        BalanceDynamicFieldSchema.parse(resp.data),
+    );
     return balanceDfObjs.map((bal) => ({
         ticker: bal.content.fields.name.fields.name.split("::")[2] ?? "UNKNOWN",
         balance: bal.content.fields.value,
